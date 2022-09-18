@@ -1,0 +1,139 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>点击后，跟随鼠标移动</title>
+    <style>
+        .move-div {
+            position: absolute;
+            height: 70px;
+            width: 70px;
+            border-radius: 50%;
+            background-color: #333;
+        }
+
+        .move-div:nth-child(2) {
+            top: 100px;
+            left: 200px;
+            background-color: #eee;
+        }
+
+        .move-div:nth-child(3) {
+            top: 300px;
+            left: 300px;
+            background-color: #999;
+        }
+
+        .when-move {
+            box-shadow: 0 0 2px 2px #333;
+        }
+
+        @media only screen and (max-width:800px) {
+            .move-div {
+                display: none;
+            }
+        }
+    </style>
+</head>
+
+<body>
+    <div class="move-div" data-move='no'></div>
+    <div class="move-div" data-move='no'></div>
+    <div class="move-div" data-move='no'></div>
+    <script>
+        let div = document.querySelectorAll('.move-div');
+        let index = 0, listenerArray = [], isMove = false
+        for (let i = 0; i < div.length; i++) {
+            //初始化每一个拖动元素的序号
+            div[i].setAttribute('data-index', i);
+            //当前元素是否处于显示状态，不同状态的元素会有不同的动作
+            div[i].setAttribute('isVisible', '1');
+            div[i].addEventListener('mousedown', function (cE) {
+                //设置当前拖动的元素编号
+                //添加鼠标移动事件
+                index = i;
+                const curDiv = div[i]
+
+                if (curDiv.getAttribute('isVisible') == '0') {
+                    curDiv.style.transform = "none"
+                }
+                // 当前状态为静止时 ， *全局*添加鼠标移动事件
+                document.addEventListener('mousemove', followMouse)
+
+            })
+            div[i].addEventListener('mouseup', function (cE) {
+                //移动完毕，判断当前元素状态
+                const curDiv = div[index]
+                const left = curDiv.offsetLeft
+                //柯里化
+                //鼠标悬浮在边界状态时的元素时的事件
+                function mouseIn(e) { borderMouseIn(e, i); }
+                function mouseOut(e) { borderMouseOut(e, i) }
+                //全局中添加局部事件
+                listenerArray[i] = {
+                    mouseIn,
+                    mouseOut
+                }
+                //元素超过视窗左边界
+                if (left <= 0 && curDiv.getAttribute('isVisible') == '1') {
+                    alert(curDiv.getAttribute('isVisible'))
+                    curDiv.style.left = 0
+                    curDiv.style.transform = 'translateX(-50%)'
+                    curDiv.setAttribute('isVisible', '0')
+                    curDiv.addEventListener('mouseover', mouseIn)
+                    curDiv.addEventListener('mouseleave', mouseOut)
+                }
+                document.removeEventListener('mousemove', followMouse);
+            })
+        }
+
+        //跟随移动
+        function followMouse(e) {
+            if (isMove) return
+            const curDiv = div[index], listeners = listenerArray[index]
+            let x = e.clientX - curDiv.offsetWidth / 2;  //相对于浏览器可视窗口
+            let y = e.clientY - curDiv.offsetHeight / 2;
+            curDiv.style.top = y + 'px';
+            curDiv.style.left = x + 'px';
+            if (curDiv.getAttribute('isVisible') == '0') {
+                setTimeout(() => {
+                    curDiv.removeEventListener('mouseover', listeners.mouseIn)
+                    curDiv.removeEventListener('mouseleave', listeners.mouseOut)
+                }, 500)
+                curDiv.setAttribute('isVisible', '1')
+                console.log('removeMouseOver')
+            }
+        }
+
+        //处于边界，鼠标在元素上
+        function borderMouseIn(e, i) {
+            const style = div[i].style
+            style.transform = "translateX(50%)"
+            style.transition = "transform .25s ease-in"
+        }
+
+        //处于边界，鼠标移出元素外
+        function borderMouseOut(e, i) {
+            const style = div[i].style
+            style.transform = "translateX(-50%)"
+        }
+
+        //写一个防抖，防止在动画期间移动
+        function antiShake() {
+            timer = null
+            isMove = true
+            return () => {
+                if (timer) {
+                    clearTimeout(timer)
+                }
+                timer = setTimeout(() => {
+                    isMove = false
+                }, 250)
+            }
+        }
+    </script>
+</body>
+
+</html>
