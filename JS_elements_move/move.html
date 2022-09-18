@@ -7,7 +7,7 @@
     <title>点击后，跟随鼠标移动</title>
     <style>
         .move-div {
-            position: absolute;
+            position: fixed;
             height: 70px;
             width: 70px;
             border-radius: 50%;
@@ -43,12 +43,40 @@
     <div class="move-div" data-move='no'></div>
     <div class="move-div" data-move='no'></div>
     <script>
+        /*---------------------------------------------------*/
+        //枚举隐藏的情况
+        const SIDE = {
+            LEFT: 0,
+            RIGHT: 1,
+        }
         let div = document.querySelectorAll('.move-div');
-        let index = 0, listenerArray = [], isMove = false
+        //当前拖动元素的下标，以及querySelectorAll数组中元素下标所对应的事件的数组
+        let index = 0, listenerArray = []
+        //窗口尺寸改变，更新视窗的宽度
+        let globalWidth = window.innerWidth - div[index].clientWidth
+        console.log(globalWidth)
+        window.onresize = resetWidth
+        function resetWidth(e) {
+            globalWidth = window.innerWidth - div[index].clientWidth
+            console.log(globalWidth)
+
+            div.forEach(item => {
+                if (item.getAttribute('isVisible') == '0' && item.getAttribute('side') == `${SIDE.RIGHT}`) {
+                    console.log(item)
+                    const resize_animation = () => {
+                        item.style.left = `${globalWidth}px`
+                    }
+                    //渲染之前会做这个动画，大概60帧每秒
+                    requestAnimationFrame(resize_animation)
+                }
+            })
+            //这里假设所有元素的尺寸都是相同的
+        }
+        /*---------------------------------------------------*/
         for (let i = 0; i < div.length; i++) {
             //初始化每一个拖动元素的序号
             div[i].setAttribute('data-index', i);
-            //当前元素是否处于显示状态，不同状态的元素会有不同的动作
+            //当前元素是否处于显示状态，不同状态的元素会有不同的动 作
             div[i].setAttribute('isVisible', '1');
             div[i].addEventListener('mousedown', function (cE) {
                 //设置当前拖动的元素编号
@@ -64,75 +92,107 @@
 
             })
             div[i].addEventListener('mouseup', function (cE) {
+                //如果元素绑定了动画，那么元素就不是在移动中，不需要这个事件触发
+                if (listenerArray[i]) return
                 //移动完毕，判断当前元素状态
                 const curDiv = div[index]
                 const left = curDiv.offsetLeft
-                //柯里化
-                //鼠标悬浮在边界状态时的元素时的事件
-                function mouseIn(e) { borderMouseIn(e, i); }
-                function mouseOut(e) { borderMouseOut(e, i) }
-                //全局中添加局部事件
-                listenerArray[i] = {
-                    mouseIn,
-                    mouseOut
-                }
-                //元素超过视窗左边界
-                if (left <= 0 && curDiv.getAttribute('isVisible') == '1') {
-                    alert(curDiv.getAttribute('isVisible'))
-                    curDiv.style.left = 0
-                    curDiv.style.transform = 'translateX(-50%)'
+                //元素是否处于显示状态
+                const isVisible = curDiv.getAttribute('isVisible') == '1'
+                //定义元素隐藏后行为的箭头函数，不会提升，提高性能，按需加载思想
+                let hideInSide = (side) => {
+                    //柯里化
+                    //鼠标悬浮在边界状态时的元素时的事件
+                    function mouseIn(e) { borderMouseIn(e, i, side); }
+                    function mouseOut(e) { borderMouseOut(e, i, side) }
+                    //全局中添加局部事件
+                    listenerArray[i] = {
+                        mouseIn,
+                        mouseOut
+                    }
                     curDiv.setAttribute('isVisible', '0')
                     curDiv.addEventListener('mouseover', mouseIn)
                     curDiv.addEventListener('mouseleave', mouseOut)
+
+                }
+                //元素超过视窗左边界且显示
+                if (left <= 0 && isVisible) {
+                    hideInSide(SIDE.LEFT)
+                    curDiv.style.left = 0
+                    curDiv.style.transform = 'translateX(-50%)'
+                }
+                //元素处于右边界且显示
+                else if (left >= globalWidth && isVisible) {
+                    hideInSide(SIDE.RIGHT)
+                    curDiv.style.left = `${globalWidth}px`
+                    curDiv.style.transform = 'translateX(50%)'
                 }
                 document.removeEventListener('mousemove', followMouse);
             })
         }
 
+        /*---------------------------------------------------*/
+        //下面这些函数根据模块化思想，都可以作为单个的包从外部引入
+
         //跟随移动
         function followMouse(e) {
-            if (isMove) return
             const curDiv = div[index], listeners = listenerArray[index]
             let x = e.clientX - curDiv.offsetWidth / 2;  //相对于浏览器可视窗口
             let y = e.clientY - curDiv.offsetHeight / 2;
             curDiv.style.top = y + 'px';
             curDiv.style.left = x + 'px';
+            //如果元素处于隐藏状态，移动需要删除元素的事件
             if (curDiv.getAttribute('isVisible') == '0') {
-                setTimeout(() => {
-                    curDiv.removeEventListener('mouseover', listeners.mouseIn)
-                    curDiv.removeEventListener('mouseleave', listeners.mouseOut)
-                }, 500)
+                curDiv.removeEventListener('mouseover', listeners.mouseIn)
+                curDiv.removeEventListener('mouseleave', listeners.mouseOut)
+                listenerArray[index] = null
                 curDiv.setAttribute('isVisible', '1')
-                console.log('removeMouseOver')
             }
         }
 
         //处于边界，鼠标在元素上
-        function borderMouseIn(e, i) {
-            const style = div[i].style
-            style.transform = "translateX(50%)"
+        function borderMouseIn(e, i, side) {
+            const curDiv = div[i]
+            const style = curDiv.style
             style.transition = "transform .25s ease-in"
+            if (side == SIDE.RIGHT) {
+                style.transform = "translateX(-50%)"
+                curDiv.setAttribute('side', SIDE.RIGHT)
+            }
+            else {
+                style.transform = "translateX(50%)"
+                curDiv.setAttribute('side', SIDE.LEFT)
+            }
         }
 
         //处于边界，鼠标移出元素外
-        function borderMouseOut(e, i) {
-            const style = div[i].style
-            style.transform = "translateX(-50%)"
-        }
-
-        //写一个防抖，防止在动画期间移动
-        function antiShake() {
-            timer = null
-            isMove = true
-            return () => {
-                if (timer) {
-                    clearTimeout(timer)
-                }
-                timer = setTimeout(() => {
-                    isMove = false
-                }, 250)
+        function borderMouseOut(e, i, side) {
+            const curDiv = div[i]
+            const style = curDiv.style
+            if (side == SIDE.RIGHT) {
+                style.transform = "translateX(50%)"
+                curDiv.setAttribute('side', SIDE.RIGHT)
+            }
+            else {
+                style.transform = "translateX(-50%)"
+                curDiv.setAttribute('side', SIDE.LEFT)
             }
         }
+
+        //写一个防抖，防止在动画期间移动，。。这里不需要
+        // function antiShake() {
+        //     timer = null
+        //     return () => {
+        //         isMove = true
+        //         if (timer) {
+        //             clearTimeout(timer)
+        //         }
+        //         timer = setTimeout(() => {
+        //             isMove = false
+        //         }, 250)
+        //     }
+        // }
+        // const ani_antiShake = antiShake()
     </script>
 </body>
 
